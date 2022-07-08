@@ -1,8 +1,0 @@
-2022-07-06 23:04:21.010033 | Check Balance
-2022-07-06 23:04:36.137137 | Change PIN
-2022-07-06 23:04:40.945106 | Withdraw Money
-2022-07-07 14:21:49.044015 | Check Balance
-2022-07-07 14:22:37.673397 | Check Balance
-2022-07-07 14:22:40.262971 | Deposit Balance
-2022-07-07 14:22:49.290512 | Withdraw Money
-2022-07-07 14:22:59.142526 | Transfer Balance
