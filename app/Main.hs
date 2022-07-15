@@ -20,7 +20,16 @@ main = do
             Just a ->  do
                 menuSelector
             Nothing -> main
-    
+
+
+data AuthState = AuthState 
+    {
+        uid :: String,
+        phoneNumber :: String,
+        accountNo :: String,
+        balance :: String
+    } deriving (Show) 
+
 
 getAuthUser :: State AuthState (AuthState)
 getAuthUser = do
@@ -30,7 +39,7 @@ getAuthUser = do
 findIdxFromPhone :: String -> [[String]] -> Maybe Int
 findIdxFromPhone a xss = do 
     let exist = any (elem a) xss
-    let foundIdx = 0 -- TODO: find from nested list
+    let foundIdx = fst ((filter (\x -> snd x == a) [(fst xs, x) | xs <- (zip [0..] xss), x <- snd xs]) !! 0)
     if exist then do 
         return foundIdx
     else Nothing
@@ -38,13 +47,6 @@ findIdxFromPhone a xss = do
 splitToText :: String -> [T.Text]
 splitToText a = T.splitOn (T.pack ";") (T.pack a)
 
-data AuthState = AuthState 
-    {
-        uid :: String,
-        phoneNumber :: String,
-        accountNo :: String,
-        balance :: String
-    } deriving (Show) 
 
 readAuthPhoneNumber :: IO ((Bool, Maybe AuthState))
 readAuthPhoneNumber = do
@@ -57,14 +59,14 @@ readAuthPhoneNumber = do
             let accounts = map (\a -> map (\b -> T.unpack b) (splitToText a)) singleLine
             let maybeIdx = findIdxFromPhone authPhone accounts
             case maybeIdx of
-                Just a ->  do
+                Just a -> do
                         let account = accounts !! a
                         let authUser = AuthState {
                             uid=account !! 0, 
                             phoneNumber=account !! 4,
                             accountNo=account !! 2,
                             balance=account !! 5}
-                        let _ = execState getAuthUser authUser
+                        print authUser
                         return (True, Just authUser)
                 Nothing -> do
                     return (False, Nothing)
@@ -99,8 +101,8 @@ getActionName a
 
 logAction :: String -> IO ()
 logAction action = do
-    let authUser = getAuthUser
-    -- print $ snd authUser
+    -- let authUser = getAuthUser
+    -- print authUser
     currentTime <- getLocalCurrentDateTime
     let logMsg = (show currentTime) ++ " | " ++ "[USER] " ++ " " ++ (getActionName action) ++ "\n"
     appendFile "logs.txt" logMsg
