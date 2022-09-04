@@ -1,12 +1,18 @@
 module Main where
 
 import Data.Time
+    ( getCurrentTime, utcToLocalTime, getCurrentTimeZone, LocalTime )
 import qualified Data.Text as T
-import Control.Monad.Trans.State
-import Control.Monad.IO.Class
+import Control.Monad.Trans.State ()
+import Control.Monad.IO.Class ()
+import Prelude hiding (catch)
+import System.Directory
+import Control.Exception
+import System.IO.Error hiding (catch)
 
 main :: IO()
 main = do
+    removeIfExists "auth_user"
     isAuthenticate <- readAuthPhoneNumber
     if not (fst isAuthenticate) then do
         putStrLn "\nAccount is not found\n"
@@ -27,14 +33,23 @@ data AuthState = AuthState
         uid :: String,
         phoneNumber :: String,
         accountNo :: String,
-        balance :: String
+        balance :: String,
+        authCode :: String
     } deriving (Show) 
 
 
-getAuthUser :: State AuthState (AuthState)
+getAuthUser :: IO (AuthState)
 getAuthUser = do
-    authUser <- get
-    return authUser
+    contents <- readFile "auth_user"  
+    let singleLine = (lines contents)
+    let accounts = map (\a -> map (\b -> T.unpack b) (splitToText a "|")) singleLine
+    let account = accounts!!0
+    return AuthState {
+        uid= account !! 0, 
+        phoneNumber=account !! 1,
+        accountNo=account !! 2,
+        balance=account !! 3,
+        pin=account !! 4}
 
 findIdxFromPhone :: String -> [[String]] -> Maybe Int
 findIdxFromPhone a xss = do 
@@ -44,8 +59,8 @@ findIdxFromPhone a xss = do
         return foundIdx
     else Nothing
 
-splitToText :: String -> [T.Text]
-splitToText a = T.splitOn (T.pack ";") (T.pack a)
+splitToText :: String -> String -> [T.Text]
+splitToText a b = T.splitOn (T.pack b) (T.pack a)
 
 
 readAuthPhoneNumber :: IO ((Bool, Maybe AuthState))
@@ -56,17 +71,18 @@ readAuthPhoneNumber = do
         then do 
             contents <- readFile "db/accounts.csv"  
             let singleLine = tail $ lines contents
-            let accounts = map (\a -> map (\b -> T.unpack b) (splitToText a)) singleLine
+            let accounts = map (\a -> map (\b -> T.unpack b) (splitToText a ";")) singleLine
             let maybeIdx = findIdxFromPhone authPhone accounts
             case maybeIdx of
-                Just a -> do
-                        let account = accounts !! a
+                Just idx -> do
+                        let account = accounts !! idx
                         let authUser = AuthState {
                             uid=account !! 0, 
                             phoneNumber=account !! 4,
                             accountNo=account !! 2,
-                            balance=account !! 5}
-                        print authUser
+                            balance=account !! 5,
+                            authCode=account !! 6}
+                        writeAuth authUser
                         return (True, Just authUser)
                 Nothing -> do
                     return (False, Nothing)
@@ -97,14 +113,24 @@ getActionName a
     | a == "d" = "Deposit Balance"
     | a == "w" = "Withdraw Money"
     | a == "t" = "Transfer Balance"
-    
+
+
+writeAuth :: AuthState -> IO ()
+writeAuth authState = do
+    let logMsg = (uid authState) ++ "|" ++ (phoneNumber authState) ++ "|" ++ (accountNo authState) ++ "|" ++ (balance authState) ++ "|" ++ (authCode authState)
+    appendFile "auth_user" logMsg
+
+removeIfExists :: FilePath -> IO ()
+removeIfExists fileName = removeFile fileName `catch` handleExists
+  where handleExists e
+          | isDoesNotExistError e = return ()
+          | otherwise = throwIO e
 
 logAction :: String -> IO ()
 logAction action = do
-    -- let authUser = getAuthUser
-    -- print authUser
+    authUser <- getAuthUser
     currentTime <- getLocalCurrentDateTime
-    let logMsg = (show currentTime) ++ " | " ++ "[USER] " ++ " " ++ (getActionName action) ++ "\n"
+    let logMsg = (show currentTime) ++ " | " ++ (accountNo authUser) ++ " " ++ (getActionName action) ++ "\n"
     appendFile "logs.txt" logMsg
 
 getLocalCurrentDateTime :: IO LocalTime
@@ -130,8 +156,9 @@ menuSelector = do
 
     case selectedMenu of
         "c" -> do
-            putStrLn "\nYour Balance is"
-            putStrLn "Rp 1000.000\n"
+            authUser <- getAuthUser
+            let msg = "\nYour Balance is\nRp " ++ (balance authUser)
+            putStrLn msg
             putStrLn "(Enter) Back to Menu\n"
             _ <- getLine
             menuSelector
